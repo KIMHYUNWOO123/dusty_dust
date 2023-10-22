@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
 
-import '../const/colors.dart';
+import '../model/stat_model.dart';
+import '../model/status_model.dart';
 
 class MainAppBar extends StatelessWidget {
-  const MainAppBar({super.key});
+  final StatusModel status;
+  final StatModel stat;
+
+  const MainAppBar({required this.status, required this.stat, super.key});
 
   @override
   Widget build(BuildContext context) {
     final ts = TextStyle(color: Colors.white, fontSize: 30.0);
     return SliverAppBar(
-      backgroundColor: primaryColor,
+      backgroundColor: status.primaryColor,
       expandedHeight: 500,
       flexibleSpace: FlexibleSpaceBar(
         background: SafeArea(
@@ -19,31 +23,37 @@ class MainAppBar extends StatelessWidget {
               children: [
                 Text(
                   '서울',
-                  style: ts.copyWith(
-                      fontSize: 40.0, fontWeight: FontWeight.w700),
+                  style:
+                      ts.copyWith(fontSize: 40.0, fontWeight: FontWeight.w700),
                 ),
                 Text(
-                  DateTime.now().toString(),
+                  getTimeFromDateTime(dateTime: stat.dataTime),
                   style: ts.copyWith(
                     fontSize: 20.0,
                   ),
                 ),
-                const SizedBox(height: 20.0,),
+                const SizedBox(
+                  height: 20.0,
+                ),
                 Image.asset(
-                  'asset/img/mediocre.png',
+                  status.imagePath,
                   width: MediaQuery.of(context).size.width / 2,
                 ),
-                const SizedBox(height: 20.0,),
-                Text(
-                  '보통',
-                  style: ts.copyWith(
-                      fontSize: 40.0, fontWeight: FontWeight.w700),
+                const SizedBox(
+                  height: 20.0,
                 ),
-                const SizedBox(height: 8.0,),
                 Text(
-                  '나쁘지 않네요!',
-                  style: ts.copyWith(
-                      fontSize: 20.0, fontWeight: FontWeight.w700),
+                  status.label,
+                  style:
+                      ts.copyWith(fontSize: 40.0, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(
+                  height: 8.0,
+                ),
+                Text(
+                  status.comment,
+                  style:
+                      ts.copyWith(fontSize: 20.0, fontWeight: FontWeight.w700),
                 ),
               ],
             ),
@@ -51,5 +61,13 @@ class MainAppBar extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String getTimeFromDateTime({required DateTime dateTime}) {
+    return '${dateTime.year}-${dateTime.month}-${dateTime.day} ${getTimeFormat(dateTime.hour)}:${getTimeFormat(dateTime.minute)}';
+  }
+
+  String getTimeFormat(int number) {
+    return number.toString().padLeft(2, '0');
   }
 }
