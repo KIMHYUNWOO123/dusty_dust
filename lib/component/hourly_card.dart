@@ -4,21 +4,27 @@ import 'card_title.dart';
 import 'main_card.dart';
 
 class HourlyCard extends StatelessWidget {
-  const HourlyCard({super.key});
+  final Color darkColor;
+  final Color lightColor;
+
+  const HourlyCard(
+      {required this.darkColor, required this.lightColor, super.key});
 
   @override
   Widget build(BuildContext context) {
     return MainCard(
+      backgroundColor: lightColor,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           CardTitle(
+            backgroundColor: darkColor,
             title: '시간별 미세먼지',
           ),
           Column(
             children: List.generate(
               24,
-                  (index) {
+              (index) {
                 final now = DateTime.now();
                 final hour = now.hour;
                 int currentHour = hour - index;
@@ -30,8 +36,7 @@ class HourlyCard extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(
                       horizontal: 8.0, vertical: 4.0),
                   child: Row(
-                    mainAxisAlignment:
-                    MainAxisAlignment.spaceBetween,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Expanded(
                         child: Text(
@@ -44,7 +49,11 @@ class HourlyCard extends StatelessWidget {
                           height: 20.0,
                         ),
                       ),
-                      Expanded(child: Text('좋음',textAlign: TextAlign.right,)),
+                      Expanded(
+                          child: Text(
+                        '좋음',
+                        textAlign: TextAlign.right,
+                      )),
                     ],
                   ),
                 );

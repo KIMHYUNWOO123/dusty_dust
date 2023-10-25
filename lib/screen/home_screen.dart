@@ -1,12 +1,12 @@
 import 'package:dusty_dust/component/category_card.dart';
 import 'package:dusty_dust/component/main_app_bar.dart';
 import 'package:dusty_dust/component/main_drawer.dart';
+import 'package:dusty_dust/model/stat_and_status_model.dart';
 import 'package:dusty_dust/repository/stat_repository.dart';
 import 'package:dusty_dust/utils/data_utils.dart';
 import 'package:flutter/material.dart';
 
 import '../component/hourly_card.dart';
-import '../const/colors.dart';
 import '../const/regions.dart';
 import '../model/stat_model.dart';
 
@@ -22,14 +22,24 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<Map<ItemCode, List<StatModel>>> fetchData() async {
     Map<ItemCode, List<StatModel>> stats = {};
-    for (ItemCode itemCode in ItemCode.values) {
-      final statModels = await StatRepository.fetchData(
-        itemCode: itemCode,
-      );
 
-      stats.addAll({
-        itemCode: statModels,
-      });
+    List<Future> futures = [];
+
+    for (ItemCode itemCode in ItemCode.values) {
+      futures.add(
+        StatRepository.fetchData(
+          itemCode: itemCode,
+        ),
+      );
+    }
+
+    final results = await Future.wait(futures);
+
+    for (int i = 0; i < results.length; i++) {
+      final key = ItemCode.values[i];
+      final value = results[i];
+
+      stats.addAll({key: value});
     }
 
     return stats;
@@ -38,7 +48,6 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: primaryColor,
       drawer: MainDrawer(
           selectedRegion: region,
           onRegionTap: (String region) {
@@ -70,24 +79,47 @@ class _HomeScreenState extends State<HomeScreen> {
               itemCode: ItemCode.PM10,
             );
 
-            return CustomScrollView(
-              slivers: [
-                MainAppBar(
-                  status: status,
-                  stat: pm10RecentStat,
-                  region: region,
-                ),
-                SliverToBoxAdapter(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      CategoryCard(),
-                      const SizedBox(height: 16.0),
-                      HourlyCard(),
-                    ],
+            final ssModel = stats.keys.map((key) {
+              final value = stats[key]!;
+              final stat = value[0];
+
+              return StatAndStatusModel(
+                itemCode: key,
+                stat: stat,
+                status: DataUtils.getStatusFromItemCodeAndValue(
+                    value: stat.getLevelFromRegion(region), itemCode: key),
+              );
+            }).toList();
+
+            return Container(
+              color: status.primaryColor,
+              child: CustomScrollView(
+                slivers: [
+                  MainAppBar(
+                    status: status,
+                    stat: pm10RecentStat,
+                    region: region,
                   ),
-                ),
-              ],
+                  SliverToBoxAdapter(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        CategoryCard(
+                          region: region,
+                          models: ssModel,
+                          darkColor: status.darkColor,
+                          lightColor: status.lightColor,
+                        ),
+                        const SizedBox(height: 16.0),
+                        HourlyCard(
+                          darkColor: status.darkColor,
+                          lightColor: status.lightColor,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             );
           }),
     );
