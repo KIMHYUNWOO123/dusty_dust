@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../const/colors.dart';
 import '../const/regions.dart';
 
 typedef OnRegionTap = void Function(String region);
@@ -8,9 +7,15 @@ typedef OnRegionTap = void Function(String region);
 class MainDrawer extends StatelessWidget {
   final OnRegionTap onRegionTap;
   final String selectedRegion;
+  final Color darkColor;
+  final Color lightColor;
 
   const MainDrawer(
-      {required this.onRegionTap, required this.selectedRegion, super.key});
+      {required this.lightColor,
+      required this.darkColor,
+      required this.onRegionTap,
+      required this.selectedRegion,
+      super.key});
 
   @override
   Widget build(BuildContext context) {
