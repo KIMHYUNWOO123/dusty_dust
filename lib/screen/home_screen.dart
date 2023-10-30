@@ -1,13 +1,14 @@
-import 'package:dusty_dust/component/category_card.dart';
+import 'package:dio/dio.dart';
 import 'package:dusty_dust/component/main_app_bar.dart';
-import 'package:dusty_dust/model/stat_and_status_model.dart';
+import 'package:dusty_dust/container/category_card.dart';
 import 'package:dusty_dust/repository/stat_repository.dart';
 import 'package:dusty_dust/utils/data_utils.dart';
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
-import '../component/hourly_card.dart';
 import '../component/main_drawer.dart';
 import '../const/regions.dart';
+import '../container/hourly_card.dart';
 import '../model/stat_model.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -27,6 +28,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
 
     scrollController.addListener(scrollListener);
+    fetchData();
   }
 
   @override
@@ -36,29 +38,55 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  Future<Map<ItemCode, List<StatModel>>> fetchData() async {
-    Map<ItemCode, List<StatModel>> stats = {};
-
-    List<Future> futures = [];
-
-    for (ItemCode itemCode in ItemCode.values) {
-      futures.add(
-        StatRepository.fetchData(
-          itemCode: itemCode,
-        ),
+  Future<void> fetchData() async {
+    try {
+      final now = DateTime.now();
+      final fetchTime = DateTime(
+        now.year,
+        now.month,
+        now.day,
+        now.hour,
       );
+
+      final box = Hive.box<StatModel>(ItemCode.PM10.name);
+
+      if (box.values.isNotEmpty &&
+          (box.values.last as StatModel).dataTime.isAtSameMomentAs(fetchTime)) {
+        return;
+      }
+      List<Future> futures = [];
+
+      for (ItemCode itemCode in ItemCode.values) {
+        futures.add(
+          StatRepository.fetchData(
+            itemCode: itemCode,
+          ),
+        );
+      }
+
+      final results = await Future.wait(futures);
+
+      for (int i = 0; i < results.length; i++) {
+        final key = ItemCode.values[i];
+        final value = results[i];
+
+        final box = Hive.box<StatModel>(key.name);
+
+        for (StatModel stat in value) {
+          box.put(stat.dataTime.toString(), stat);
+        }
+
+        final allKeys = box.keys.toList();
+
+        if (allKeys.length > 24) {
+          final deleteKeys = allKeys.sublist(0, allKeys.length - 24);
+          box.deleteAll(deleteKeys);
+        }
+      }
+    } on DioError catch (e) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('인터넷 연결이 원활하지 않습니다.')));
     }
-
-    final results = await Future.wait(futures);
-
-    for (int i = 0; i < results.length; i++) {
-      final key = ItemCode.values[i];
-      final value = results[i];
-
-      stats.addAll({key: value});
-    }
-
-    return stats;
   }
 
   scrollListener() {
@@ -73,65 +101,46 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<Map<ItemCode, List<StatModel>>>(
-      future: fetchData(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Scaffold(
-            body: Center(
-              child: Text('에러가 있습니다.'),
-            ),
-          );
-        }
-
-        if (!snapshot.hasData) {
+    return ValueListenableBuilder(
+      valueListenable: Hive.box<StatModel>(ItemCode.PM10.name).listenable(),
+      builder: (context, box, widget) {
+        if (box.values.isEmpty) {
           return Scaffold(
             body: Center(
               child: CircularProgressIndicator(),
             ),
           );
         }
-
-        Map<ItemCode, List<StatModel>> stats = snapshot.data!;
-        StatModel pm10RecentStat = stats[ItemCode.PM10]![0];
-
+        final recentStat = box.values.toList().last as StatModel;
         final status = DataUtils.getStatusFromItemCodeAndValue(
-          value: pm10RecentStat.seoul,
+          value: recentStat.getLevelFromRegion(region),
           itemCode: ItemCode.PM10,
         );
-
-        final ssModel = stats.keys.map((key) {
-          final value = stats[key]!;
-          final stat = value[0];
-
-          return StatAndStatusModel(
-            itemCode: key,
-            stat: stat,
-            status: DataUtils.getStatusFromItemCodeAndValue(
-                value: stat.getLevelFromRegion(region), itemCode: key),
-          );
-        }).toList();
         return Scaffold(
-            drawer: MainDrawer(
-                lightColor: status.lightColor,
-                darkColor: status.darkColor,
-                selectedRegion: region,
-                onRegionTap: (String region) {
-                  setState(() {
-                    this.region = region;
-                  });
-                  Navigator.of(context).pop();
-                }),
-            body: Container(
-              color: status.primaryColor,
+          drawer: MainDrawer(
+              lightColor: status.lightColor,
+              darkColor: status.darkColor,
+              selectedRegion: region,
+              onRegionTap: (String region) {
+                setState(() {
+                  this.region = region;
+                });
+                Navigator.of(context).pop();
+              }),
+          body: Container(
+            color: status.primaryColor,
+            child: RefreshIndicator(
+              onRefresh: () async {
+                await fetchData();
+              },
               child: CustomScrollView(
                 controller: scrollController,
                 slivers: [
                   MainAppBar(
                     isExpanded: isExpanded,
-                    dateTime: pm10RecentStat.dataTime,
+                    dateTime: recentStat.dataTime,
                     status: status,
-                    stat: pm10RecentStat,
+                    stat: recentStat,
                     region: region,
                   ),
                   SliverToBoxAdapter(
@@ -140,25 +149,19 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         CategoryCard(
                           region: region,
-                          models: ssModel,
                           darkColor: status.darkColor,
                           lightColor: status.lightColor,
                         ),
                         const SizedBox(height: 16.0),
-                        ...stats.keys.map(
+                        ...ItemCode.values.map(
                           (itemCode) {
-                            final stat = stats[itemCode]!;
-
                             return Padding(
                               padding: const EdgeInsets.only(bottom: 16.0),
                               child: HourlyCard(
                                 darkColor: status.darkColor,
                                 lightColor: status.lightColor,
-                                stats: stat,
-                                category: DataUtils.getItemCodeKrString(
-                                  itemCode: itemCode,
-                                ),
                                 region: region,
+                                itemCode: itemCode,
                               ),
                             );
                           },
@@ -169,7 +172,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
               ),
-            ));
+            ),
+          ),
+        );
       },
     );
   }
